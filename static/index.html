@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ripple Brain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<style>
+  :root{
+    --bg:#0B0D10; --surface:#12151A; --hairline:rgba(255,255,255,0.06);
+    --text:#E8EAED; --muted:#8A8F98; --accent:#7C5CFF;
+    --amber:#E2A33C; --red:#E2574C;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:Inter,system-ui,sans-serif; font-size:13px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .label{
+    font-size:11px; text-transform:uppercase; letter-spacing:.09em;
+    color:var(--muted); font-weight:500;
+  }
+  .surface{background:var(--surface); border:1px solid var(--hairline); border-radius:12px}
+  .hair{border-color:var(--hairline)}
+  input,select,button{font:inherit; color:inherit}
+  input{
+    background:transparent; border:1px solid var(--hairline); border-radius:10px;
+    padding:8px 12px; outline:none; transition:border-color .15s ease;
+  }
+  input:focus{border-color:rgba(124,92,255,.55)}
+  input::placeholder{color:var(--muted)}
+  .btn{
+    background:var(--accent); border:none; border-radius:10px; padding:9px 18px;
+    font-weight:500; letter-spacing:-.01em; cursor:pointer;
+    transition:opacity .15s ease, transform .15s ease;
+  }
+  .btn:hover{opacity:.9}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.4; cursor:default}
+  .btn-quiet{
+    background:transparent; border:1px solid var(--hairline); border-radius:10px;
+    padding:7px 14px; color:var(--muted); cursor:pointer;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .btn-quiet:hover{color:var(--text); border-color:rgba(255,255,255,.16)}
+
+  /* scrollbars stay out of the way */
+  .scroll{overflow-y:auto; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.1) transparent}
+  .scroll::-webkit-scrollbar{width:6px}
+  .scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1); border-radius:3px}
+
+  /* pills, dots, breadcrumbs */
+  .pill{
+    display:inline-block; font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    padding:2px 7px; border-radius:999px; border:1px solid var(--hairline); color:var(--muted);
+  }
+  .pill-inferred{border-color:rgba(124,92,255,.35); color:#A596FF}
+  .dot{display:inline-block; width:6px; height:6px; border-radius:999px; background:var(--muted)}
+  .dot-high{background:var(--red)}
+  .dot-med{background:var(--amber)}
+  .crumb{
+    font-size:11px; color:var(--muted); letter-spacing:-.005em;
+    word-break:break-word;
+  }
+
+  /* risk badge tooltip */
+  .risk{position:relative; cursor:default}
+  .risk .tip{
+    position:absolute; top:calc(100% + 8px); right:0; width:230px; z-index:40;
+    background:var(--surface); border:1px solid var(--hairline); border-radius:10px;
+    padding:10px 12px; font-size:11px; color:var(--muted);
+    opacity:0; pointer-events:none; transform:translateY(-3px);
+    transition:opacity .15s ease, transform .15s ease;
+  }
+  .risk:hover .tip{opacity:1; transform:translateY(0)}
+
+  /* streamed report */
+  .report h3{
+    font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted);
+    font-weight:500; margin:22px 0 8px;
+  }
+  .report h3:first-child{margin-top:0}
+  .report p{margin:0 0 10px; color:var(--text)}
+  .report ul{margin:0 0 10px; padding:0; list-style:none}
+  .report li{margin:0 0 7px; padding-left:12px; position:relative}
+  .report li::before{
+    content:""; position:absolute; left:0; top:8px;
+    width:3px; height:3px; border-radius:999px; background:rgba(255,255,255,.22);
+  }
+  .report li.sub{margin:2px 0 7px 14px; color:var(--muted); font-size:12px}
+  .report li.sub::before{display:none}
+  .report strong{font-weight:500}
+  .report code{
+    font-family:Inter,sans-serif; font-size:11px; color:var(--muted);
+    background:rgba(255,255,255,.04); border-radius:5px; padding:1px 6px;
+  }
+  .rb-in{animation:rise .35s cubic-bezier(.16,1,.3,1) both}
+  @keyframes rise{from{opacity:0; transform:translateY(4px)} to{opacity:1; transform:none}}
+
+  /* affected rows */
+  .row{
+    display:block; width:100%; text-align:left; padding:9px 10px; border-radius:10px;
+    border:1px solid transparent; cursor:pointer; transition:background .15s ease, border-color .15s ease;
+  }
+  .row:hover{background:rgba(255,255,255,.025); border-color:var(--hairline)}
+  .row.active{background:rgba(124,92,255,.07); border-color:rgba(124,92,255,.3)}
+
+  /* source drawer */
+  #drawer{
+    position:fixed; top:0; right:0; height:100%; width:392px; max-width:92vw; z-index:50;
+    background:var(--surface); border-left:1px solid var(--hairline);
+    transform:translateX(100%); transition:transform .2s cubic-bezier(.16,1,.3,1);
+    display:flex; flex-direction:column;
+  }
+  #drawer.open{transform:none}
+
+  /* drop overlay */
+  #drop{
+    position:absolute; inset:0; z-index:30; display:none;
+    align-items:center; justify-content:center;
+    background:rgba(11,13,16,.82); backdrop-filter:blur(2px);
+    border:1px dashed rgba(124,92,255,.5); border-radius:12px;
+  }
+  #drop.on{display:flex}
+
+  /* toast */
+  #toast{
+    position:fixed; left:50%; bottom:26px; transform:translate(-50%,8px); z-index:60;
+    background:var(--surface); border:1px solid var(--hairline); border-radius:10px;
+    padding:9px 16px; font-size:12px; color:var(--muted);
+    opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
+  }
+  #toast.on{opacity:1; transform:translate(-50%,0)}
+
+  .spin{width:11px;height:11px;border:1.5px solid rgba(255,255,255,.16);border-top-color:var(--accent);border-radius:999px;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="flex flex-col h-full">
+
+  <!-- top bar -->
+  <header class="flex items-center gap-4 px-6 py-3 border-b hair shrink-0">
+    <div class="font-semibold tracking-tight mr-2 whitespace-nowrap" style="letter-spacing:-.02em">Ripple&nbsp;Brain</div>
+
+    <input id="component" list="components" class="w-60 shrink-0" placeholder="Search a component"
+           autocomplete="off" spellcheck="false">
+    <datalist id="components"></datalist>
+
+    <input id="change" class="flex-1 min-w-0" placeholder="Remove support for the legacy token format"
+           autocomplete="off">
+
+    <button id="trace" class="btn shrink-0">Trace impact</button>
+
+    <div id="badges" class="flex items-center gap-2 ml-1 shrink-0"></div>
+  </header>
+
+  <!-- body -->
+  <main class="flex flex-1 min-h-0">
+
+    <!-- graph -->
+    <section class="relative min-w-0 border-r hair" style="flex:0 0 62%">
+      <div id="cy" class="absolute inset-0"></div>
+
+      <div id="drop"><div class="label">Drop .md or .txt to learn from it</div></div>
+
+      <div class="absolute left-6 bottom-5 flex items-center gap-3">
+        <button id="learn" class="btn-quiet">Learn from docs</button>
+        <input id="file" type="file" accept=".md,.txt" multiple class="hidden">
+        <span id="learn-note" class="label"></span>
+      </div>
+
+      <div class="absolute right-6 bottom-5 label" id="hint">Click a node or an edge for its source</div>
+    </section>
+
+    <!-- report -->
+    <aside class="flex flex-col min-w-0" style="flex:0 0 38%">
+
+      <div id="panel-head" class="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b hair shrink-0" style="display:none">
+        <div class="min-w-0">
+          <div class="label">Change</div>
+          <div id="head-component" class="font-medium truncate" style="letter-spacing:-.01em"></div>
+          <div id="head-change" class="crumb mt-0.5"></div>
+        </div>
+        <div class="risk shrink-0 text-right">
+          <div class="label">Risk</div>
+          <div class="flex items-center gap-2 justify-end mt-1">
+            <span id="risk-dot" class="dot"></span>
+            <span id="risk-level" class="font-medium"></span>
+          </div>
+          <div class="tip text-left" id="risk-tip"></div>
+        </div>
+      </div>
+
+      <div id="panel" class="scroll flex-1 px-6 py-6">
+        <div id="empty" class="h-full flex items-center justify-center text-center px-8">
+          <span style="color:var(--muted)">Pick a component and describe a change to see the ripple.</span>
+        </div>
+
+        <div id="content" style="display:none">
+          <section class="mb-8">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="label">Impact report</span>
+              <span id="report-status" class="label"></span>
+            </div>
+            <div id="report" class="report"></div>
+          </section>
+
+          <section id="affected-wrap" class="pt-6 border-t hair">
+            <div class="flex items-center justify-between mb-2">
+              <span class="label">Evidence paths</span>
+              <span id="affected-count" class="label"></span>
+            </div>
+            <div id="affected" class="-mx-2.5"></div>
+          </section>
+        </div>
+      </div>
+
+      <div id="panel-foot" class="px-6 py-4 border-t hair shrink-0 flex items-center gap-3" style="display:none">
+        <button id="copy" class="btn-quiet">Copy as ticket</button>
+        <span id="copy-note" class="label"></span>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- source drawer -->
+<div id="drawer">
+  <div class="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b hair">
+    <div class="min-w-0">
+      <div class="label" id="d-kind">Source</div>
+      <div id="d-title" class="font-medium mt-0.5" style="letter-spacing:-.01em"></div>
+      <div id="d-meta" class="crumb mt-1"></div>
+    </div>
+    <button id="d-close" class="btn-quiet" style="padding:4px 10px">Close</button>
+  </div>
+  <div id="d-body" class="scroll flex-1 px-6 py-5"></div>
+  <div id="d-foot" class="px-6 py-3 border-t hair label"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const ACCENT = "#7C5CFF", TEXT = "#E8EAED", MUTED = "#8A8F98";
+const HOP_DELAY = 250;
+
+const $ = (id) => document.getElementById(id);
+let cy = null, META = {}, NODES = {}, current = null, reportText = "";
+
+/* ---------- small helpers ---------- */
+
+function toast(msg, ms = 2200) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("on");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("on"), ms);
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function riskClass(score) {
+  return score >= 2.5 ? "dot-high" : score >= 1.2 ? "dot-med" : "";
+}
+
+/* ---------- markdown, just enough of it ---------- */
+
+function inline(s) {
+  return esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/(^|\s)_([^_]+)_/g, "$1<em>$2</em>");
+}
+
+function md(src) {
+  const out = [];
+  let list = null;
+  const flush = () => { if (list) { out.push("<ul>" + list.join("") + "</ul>"); list = null; } };
+
+  for (const raw of src.split("\n")) {
+    const line = raw.replace(/\r$/, "");
+    const heading = line.match(/^#{1,3}\s+(.*)$/);
+    if (heading) { flush(); out.push("<h3>" + inline(heading[1]) + "</h3>"); continue; }
+
+    const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
+    if (bullet) {
+      const sub = bullet[1].length >= 2 ? " class=\"sub\"" : "";
+      (list ||= []).push("<li" + sub + ">" + inline(bullet[2]) + "</li>");
+      continue;
+    }
+    if (!line.trim()) { flush(); continue; }
+    flush();
+    out.push("<p>" + inline(line) + "</p>");
+  }
+  flush();
+  return out.join("");
+}
+
+/* Append only what is new, so finished blocks fade in once and the block still
+   being streamed does not flicker. */
+function renderStream(container, html, state) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  const kids = [...tmp.children];
+  while (container.children.length > state.settled) container.lastElementChild.remove();
+  kids.slice(state.settled).forEach((node, i) => {
+    if (state.settled + i < kids.length - 1) node.classList.add("rb-in");
+    container.appendChild(node);
+  });
+  state.settled = Math.max(0, kids.length - 1);
+}
+
+/* ---------- graph ---------- */
+
+const STYLE = [
+  { selector: "node", style: {
+      "width": 13, "height": 13, "background-color": MUTED,
+      "label": "data(name)", "font-family": "Inter, sans-serif", "font-size": 9.5,
+      "font-weight": 400, "color": MUTED, "text-valign": "bottom",
+      "text-margin-y": 7, "text-max-width": 96, "text-wrap": "wrap",
+      "text-background-color": "#0B0D10", "text-background-opacity": 0.8,
+      "text-background-padding": 2, "text-background-shape": "roundrectangle",
+      "border-width": 0, "outline-width": 0, "outline-color": ACCENT,
+      "transition-property": "background-color opacity width height color border-width",
+      "transition-duration": "260ms", "transition-timing-function": "ease-out" } },
+  { selector: "node[type = 'test']", style: { "shape": "round-rectangle", "width": 11, "height": 11 } },
+  { selector: "node[type = 'doc']", style: { "shape": "round-diamond", "width": 13, "height": 13 } },
+  { selector: "node[type = 'database']", style: { "shape": "round-hexagon" } },
+
+  { selector: "edge", style: {
+      "width": 1, "line-color": "rgba(255,255,255,0.11)", "curve-style": "bezier",
+      "target-arrow-shape": "triangle", "target-arrow-color": "rgba(255,255,255,0.14)",
+      "arrow-scale": 0.55, "opacity": 1,
+      "transition-property": "line-color width opacity target-arrow-color",
+      "transition-duration": "260ms", "transition-timing-function": "ease-out" } },
+
+  { selector: ".dim", style: { "opacity": 0.25 } },
+  { selector: "node.hit", style: { "background-color": TEXT, "color": TEXT, "opacity": 1, "font-weight": 500 } },
+  { selector: "node.risk-high", style: { "border-width": 1.5, "border-color": "#E2574C" } },
+  { selector: "node.risk-med", style: { "border-width": 1.5, "border-color": "#E2A33C" } },
+  { selector: "node.changed", style: {
+      "background-color": ACCENT, "color": TEXT, "width": 18, "height": 18,
+      "opacity": 1, "font-weight": 600 } },
+  { selector: "node.fresh", style: { "background-color": ACCENT } },
+  { selector: "edge.flow", style: {
+      "line-color": ACCENT, "target-arrow-color": ACCENT, "width": 1.6, "opacity": 1 } },
+  { selector: "node:selected, edge:selected", style: { "opacity": 1 } },
+];
+
+async function loadGraph(keepView) {
+  const res = await fetch("/api/graph");
+  const data = await res.json();
+  META = data.meta;
+  NODES = {};
+  data.nodes.forEach((n) => (NODES[n.data.id] = n.data));
+
+  const list = $("components");
+  list.innerHTML = data.nodes
+    .map((n) => `<option value="${esc(n.data.name)}">${esc(n.data.type)}</option>`)
+    .join("");
+
+  renderBadges();
+
+  if (cy && keepView) {
+    cy.json({ elements: data });
+    layout();
+    return data;
+  }
+
+  cy = cytoscape({
+    container: $("cy"),
+    elements: data,
+    style: STYLE,
+    minZoom: 0.4, maxZoom: 2.2,
+    wheelSensitivity: 0.18,
+  });
+  cy.on("tap", "node", (e) => openSource(e.target.id()));
+  cy.on("tap", "edge", (e) => openSource(e.target.id()));
+  cy.on("tap", (e) => { if (e.target === cy) closeDrawer(); });
+  layout();
+  return data;
+}
+
+function layout() {
+  const roots = cy.nodes().filter((n) => n.indegree() === 0);
+  cy.layout({
+    name: "breadthfirst",
+    directed: true,
+    roots: roots.length ? roots : undefined,
+    spacingFactor: 1.15,
+    padding: 46,
+    animate: false,
+  }).run();
+  cy.fit(undefined, 52);
+}
+
+function renderBadges() {
+  const bits = [];
+  if (META.store === "hydradb") bits.push(`<span class="pill">Powered by HydraDB</span>`);
+  bits.push(`<span class="pill">${META.llm === "gemini" ? "Gemini" : "Offline"}</span>`);
+  $("badges").innerHTML = bits.join("");
+}
+
+/* ---------- the ripple ---------- */
+
+function clearRipple() {
+  if (!cy) return;
+  cy.elements().removeClass("dim hit changed flow risk-high risk-med");
+  cy.nodes().stop(true).style("outline-width", 0);
+}
+
+function pulse(node) {
+  const ring = () => {
+    if (!node.hasClass("changed")) return;
+    node.style({ "outline-width": 3, "outline-opacity": 0.55 })
+        .animate({ style: { "outline-width": 26, "outline-opacity": 0 } },
+                 { duration: 1300, easing: "ease-out", complete: ring });
+  };
+  ring();
+}
+
+/* A single expanding ring, used when a dropped doc adds a node. */
+function pulseOnce(node) {
+  node.addClass("fresh");
+  node.style({ "outline-width": 3, "outline-opacity": 0.6 })
+      .animate({ style: { "outline-width": 30, "outline-opacity": 0 } },
+               { duration: 1100, easing: "ease-out",
+                 complete: () => { node.style("outline-width", 0); node.removeClass("fresh"); } });
+}
+
+function ripple(result) {
+  clearRipple();
+  const changed = cy.$id(result.component.id);
+  cy.elements().addClass("dim");
+  changed.removeClass("dim").addClass("changed");
+  pulse(changed);
+
+  const byHop = new Map();
+  result.affected.forEach((a) => {
+    if (!byHop.has(a.hop)) byHop.set(a.hop, []);
+    byHop.get(a.hop).push(a);
+  });
+
+  [...byHop.keys()].sort((a, b) => a - b).forEach((hop) => {
+    setTimeout(() => {
+      byHop.get(hop).forEach((a) => {
+        const node = cy.$id(a.id);
+        node.removeClass("dim").addClass("hit");
+        if (a.risk >= 2.5) node.addClass("risk-high");
+        else if (a.risk >= 1.2) node.addClass("risk-med");
+
+        for (let i = 1; i < a.path.length; i++) {
+          const edge = cy.$id(`${a.path[i - 1]}__${a.path[i]}`);
+          if (edge.length) drawEdge(edge);
+        }
+      });
+    }, hop * HOP_DELAY);
+  });
+}
+
+function drawEdge(edge) {
+  if (edge.hasClass("flow")) return;
+  edge.removeClass("dim").addClass("flow");
+  edge.style({ "line-dash-pattern": [6, 5], "line-style": "dashed", "line-dash-offset": 22 })
+      .animate({ style: { "line-dash-offset": 0 } },
+               { duration: 420, easing: "ease-out",
+                 complete: () => edge.style("line-style", "solid") });
+}
+
+/* ---------- affected list ---------- */
+
+function renderAffected(result) {
+  const groups = [
+    ["Direct", result.direct],
+    ["Indirect", result.indirect],
+  ];
+  const html = groups.map(([title, rows]) => {
+    if (!rows.length) return "";
+    const items = rows.map((a) => `
+      <button class="row" data-id="${esc(a.id)}">
+        <div class="flex items-center gap-2">
+          <span class="dot ${riskClass(a.risk)}"></span>
+          <span class="font-medium truncate" style="letter-spacing:-.01em">${esc(a.name)}</span>
+          <span class="pill ${a.confidence === "inferred" ? "pill-inferred" : ""} ml-auto shrink-0">${esc(a.confidence)}</span>
+        </div>
+        <div class="crumb mt-1">${a.path_names.map(esc).join(" → ")}</div>
+      </button>`).join("");
+    return `<div class="mb-4"><div class="label px-2.5 mb-1">${title} · ${rows.length}</div>${items}</div>`;
+  }).join("");
+
+  $("affected").innerHTML = html || `<div class="px-2.5" style="color:var(--muted)">Nothing in the graph depends on this component.</div>`;
+  $("affected-count").textContent = result.affected.length
+    ? `${result.affected.length} total · max ${result.max_hop} hops` : "";
+
+  $("affected").querySelectorAll(".row").forEach((row) => {
+    row.onclick = () => {
+      $("affected").querySelectorAll(".row").forEach((r) => r.classList.remove("active"));
+      row.classList.add("active");
+      openSource(row.dataset.id);
+    };
+  });
+}
+
+/* ---------- trace ---------- */
+
+async function trace() {
+  const typed = $("component").value.trim();
+  const change = $("change").value.trim() || $("change").placeholder;
+  const match = Object.values(NODES).find(
+    (n) => n.name.toLowerCase() === typed.toLowerCase() || n.id === typed);
+
+  if (!match) { toast(typed ? `No component named "${typed}"` : "Pick a component first"); return; }
+
+  $("trace").disabled = true;
+  $("report-status").innerHTML = '<span class="spin inline-block"></span>';
+
+  let result;
+  try {
+    const res = await fetch("/api/impact", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ component_id: match.id, change }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    result = await res.json();
+  } catch (err) {
+    $("trace").disabled = false;
+    $("report-status").textContent = "";
+    toast("Could not trace impact: " + err.message);
+    return;
+  }
+
+  current = { result, change };
+  $("empty").style.display = "none";
+  $("content").style.display = "";
+  $("panel-head").style.display = "";
+  $("panel-foot").style.display = "";
+
+  $("head-component").textContent = result.component.name;
+  $("head-change").textContent = change;
+  $("risk-level").textContent = `${result.risk.level} · ${result.risk.score}`;
+  $("risk-dot").className = "dot " + riskClass(result.risk.score);
+  $("risk-tip").textContent = `${result.risk.formula}. Overall level is the highest score across affected components.`;
+
+  renderAffected(result);
+  ripple(result);
+  await streamReport(match.id, change);
+  $("trace").disabled = false;
+}
+
+async function streamReport(componentId, change) {
+  const target = $("report");
+  target.innerHTML = "";
+  reportText = "";
+  const state = { settled: 0 };
+
+  try {
+    const res = await fetch("/api/report", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ component_id: componentId, change }),
+    });
+    if (!res.ok) throw new Error(res.statusText);
+
+    const source = res.headers.get("X-Ripple-Source") || "";
+    const store = res.headers.get("X-Ripple-Store") || "";
+    if (store === "hydradb" && META.store !== "hydradb") { META.store = "hydradb"; renderBadges(); }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let pending = null;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      reportText += decoder.decode(value, { stream: true });
+      if (!pending) {
+        pending = setTimeout(() => {
+          pending = null;
+          renderStream(target, md(reportText), state);
+        }, 50);
+      }
+    }
+    if (pending) clearTimeout(pending);
+    state.settled = 0;
+    target.innerHTML = "";
+    renderStream(target, md(reportText), state);
+    $("report-status").textContent =
+      source === "cache" ? "cached" : source === "gemini" ? "Gemini" : "offline";
+  } catch (err) {
+    $("report-status").textContent = "";
+    target.innerHTML = `<p style="color:var(--muted)">The report could not be generated (${esc(err.message)}). The graph and the affected list above are unaffected — they are computed locally.</p>`;
+  }
+}
+
+/* ---------- source drawer ---------- */
+
+async function openSource(id) {
+  const drawer = $("drawer");
+  $("d-body").innerHTML = '<div class="spin"></div>';
+  drawer.classList.add("open");
+  try {
+    const res = await fetch("/api/source/" + encodeURIComponent(id));
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const d = await res.json();
+
+    $("d-kind").textContent = d.kind === "edge" ? "Dependency" : "Component";
+    $("d-title").textContent = d.title;
+    const meta = [d.subtitle, d.owner ? "Owner: " + d.owner : "Owner: not recorded"];
+    if (d.criticality) meta.push("Criticality: " + d.criticality);
+    $("d-meta").textContent = meta.join(" · ");
+
+    const blocks = [];
+    (d.snippets || []).forEach((s) => blocks.push(snippetCard(s)));
+    (d.retrieved || []).forEach((s) => blocks.push(snippetCard(s, true)));
+    $("d-body").innerHTML = blocks.length ? blocks.join("")
+      : `<div style="color:var(--muted)">No source snippet is recorded for this item.</div>`;
+
+    $("d-foot").textContent = d.served_by === "hydradb"
+      ? "Retrieved by HydraDB" : "Retrieved from local documents";
+    if (d.served_by === "hydradb" && META.store !== "hydradb") { META.store = "hydradb"; renderBadges(); }
+  } catch (err) {
+    $("d-body").innerHTML = `<div style="color:var(--muted)">${esc(err.message)}</div>`;
+    $("d-foot").textContent = "";
+  }
+}
+
+function snippetCard(s, retrieved) {
+  const tags = [];
+  if (s.via) tags.push(esc(s.via));
+  if (s.confidence) tags.push(`<span class="pill ${s.confidence === "inferred" ? "pill-inferred" : ""}">${esc(s.confidence)}</span>`);
+  if (retrieved) tags.push(`<span class="pill">retrieved</span>`);
+  return `<div class="surface p-4 mb-3">
+    <div class="label mb-2">${esc(s.doc || "source")}</div>
+    <div>${esc(s.snippet)}</div>
+    ${tags.length ? `<div class="crumb mt-2 flex items-center gap-2 flex-wrap">${tags.join("")}</div>` : ""}
+  </div>`;
+}
+
+function closeDrawer() { $("drawer").classList.remove("open"); }
+
+/* ---------- copy as ticket ---------- */
+
+function ticket() {
+  if (!current) return "";
+  const r = current.result;
+  const lines = [
+    `# Change review: ${r.component.name}`,
+    "",
+    `**Change:** ${current.change}`,
+    `**Owner:** ${r.component.owner || "not recorded"}`,
+    `**Deterministic risk:** ${r.risk.level} (${r.risk.score}) — ${r.risk.formula}`,
+    "",
+    "## Blast radius",
+    "",
+  ];
+  r.affected.forEach((a) => {
+    lines.push(`- [ ] **${a.name}** (hop ${a.hop}, risk ${a.risk}, ${a.confidence})`);
+    lines.push(`      Path: ${a.path_names.join(" → ")}`);
+    lines.push(`      Owner: ${a.owner || "not recorded"}`);
+  });
+  if (!r.affected.length) lines.push("- Nothing in the graph depends on this component.");
+  lines.push("", "## Impact report", "", reportText.trim() || "(not generated)");
+  lines.push("", "---", "Potential impact only. A missing edge does not prove there is no dependency.");
+  return lines.join("\n");
+}
+
+/* ---------- learn from docs ---------- */
+
+async function ingest(files) {
+  if (!files || !files.length) return;
+  $("learn-note").textContent = "Reading " + files.length + " doc" + (files.length > 1 ? "s" : "") + "…";
+
+  const body = new FormData();
+  [...files].forEach((f) => body.append("files", f));
+
+  try {
+    const res = await fetch("/api/ingest", { method: "POST", body });
+    if (!res.ok) throw new Error((await res.text()) || res.statusText);
+    const out = await res.json();
+
+    const before = new Set(Object.keys(NODES));
+    await loadGraph(true);
+    const fresh = Object.keys(NODES).filter((id) => !before.has(id));
+
+    if (fresh.length) {
+      const added = cy.collection(fresh.map((id) => cy.$id(id)));
+      cy.animate({ fit: { eles: cy.elements(), padding: 52 } },
+                 { duration: 450, easing: "ease-out" });
+      setTimeout(() => added.forEach(pulseOnce), 470);
+    }
+
+    $("learn-note").textContent = "";
+    toast(`Learned ${out.added_components} component(s) and ${out.added_dependencies} dependency(ies) from ${out.docs} doc(s)` +
+          (out.dropped ? `, dropped ${out.dropped} unsupported` : ""));
+    if (current) renderAffected(current.result);
+  } catch (err) {
+    $("learn-note").textContent = "";
+    toast("Could not learn from that doc: " + err.message, 3400);
+  }
+}
+
+/* ---------- wiring ---------- */
+
+$("trace").onclick = trace;
+["component", "change"].forEach((id) => {
+  $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") trace(); });
+});
+$("d-close").onclick = closeDrawer;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+
+$("copy").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(ticket());
+    $("copy-note").textContent = "Copied";
+  } catch {
+    $("copy-note").textContent = "Clipboard blocked";
+  }
+  setTimeout(() => ($("copy-note").textContent = ""), 1800);
+};
+
+$("learn").onclick = () => $("file").click();
+$("file").onchange = (e) => { ingest(e.target.files); e.target.value = ""; };
+
+const dropZone = $("cy").parentElement;
+let dragDepth = 0;
+dropZone.addEventListener("dragenter", (e) => { e.preventDefault(); if (++dragDepth) $("drop").classList.add("on"); });
+dropZone.addEventListener("dragover", (e) => e.preventDefault());
+dropZone.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("drop").classList.remove("on"); } });
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth = 0; $("drop").classList.remove("on");
+  ingest(e.dataTransfer.files);
+});
+
+window.addEventListener("resize", () => cy && cy.resize());
+
+loadGraph().then(() => {
+  $("component").value = NODES.auth_api ? NODES.auth_api.name : "";
+}).catch((err) => toast("Could not load the graph: " + err.message, 5000));
+</script>
+</body>
+</html>

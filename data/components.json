@@ -1,0 +1,19 @@
+[
+  { "id": "auth_api", "name": "Authentication API", "type": "api", "owner": "Identity Team", "criticality": "high" },
+  { "id": "token_service", "name": "Token Service", "type": "service", "owner": "Identity Team", "criticality": "high" },
+  { "id": "user_db", "name": "User Database", "type": "database", "owner": "Identity Team", "criticality": "high" },
+  { "id": "session_cache", "name": "Session Cache", "type": "database", "owner": "Identity Team", "criticality": "medium" },
+  { "id": "web_app", "name": "Web App", "type": "app", "owner": "Web Platform", "criticality": "high" },
+  { "id": "mobile_app", "name": "Mobile App", "type": "app", "owner": "Mobile Team", "criticality": "high" },
+  { "id": "billing_service", "name": "Billing Service", "type": "service", "owner": "Payments Team", "criticality": "high" },
+  { "id": "notification_service", "name": "Notification Service", "type": "service", "owner": null, "criticality": "medium" },
+  { "id": "analytics_pipeline", "name": "Analytics Pipeline", "type": "service", "owner": "Data Team", "criticality": "medium" },
+  { "id": "data_warehouse", "name": "Data Warehouse", "type": "database", "owner": "Data Team", "criticality": "medium" },
+  { "id": "reporting_tool", "name": "Reporting Tool", "type": "app", "owner": "Data Team", "criticality": "medium" },
+  { "id": "audit_log", "name": "Audit Log Service", "type": "service", "owner": "Platform Security", "criticality": "medium" },
+  { "id": "partner_portal", "name": "Partner Portal", "type": "app", "owner": "Partnerships", "criticality": "low" },
+  { "id": "web_tests", "name": "Web App E2E Suite", "type": "test", "owner": "Web Platform", "criticality": "low" },
+  { "id": "mobile_tests", "name": "Mobile App Test Suite", "type": "test", "owner": "Mobile Team", "criticality": "low" },
+  { "id": "billing_tests", "name": "Billing Contract Tests", "type": "test", "owner": "Payments Team", "criticality": "low" },
+  { "id": "legacy_token_runbook", "name": "Legacy Token Runbook", "type": "doc", "owner": "Identity Team", "criticality": "medium" }
+]

@@ -1,0 +1,9 @@
+# Pinned to the versions this project was built and tested against.
+fastapi==0.143.0
+uvicorn==0.54.0
+networkx==3.6.1
+python-dotenv==1.2.4
+python-multipart==0.0.32
+google-genai==2.29.0
+hydradb-sdk==2.1.7
+pytest==9.1.1
